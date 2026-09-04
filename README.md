@@ -37,6 +37,7 @@ stdout:
 ```sh
 go run ./cmd/mdfmt < messy.md > clean.md
 go run ./cmd/mdfmt messy.md > clean.md
+go run ./cmd/mdfmt -w messy.md   # rewrite messy.md in place
 ```
 
 As a library:

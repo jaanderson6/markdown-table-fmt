@@ -2,6 +2,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -17,21 +18,45 @@ func main() {
 }
 
 func run(args []string) error {
+	fs := flag.NewFlagSet("mdfmt", flag.ContinueOnError)
+	write := fs.Bool("w", false, "rewrite the file in place instead of printing to stdout")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "usage: mdfmt [-w] [file]")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	rest := fs.Args()
+	if len(rest) > 1 {
+		return fmt.Errorf("usage: mdfmt [-w] [file]")
+	}
+	if *write && len(rest) == 0 {
+		return fmt.Errorf("-w requires a file argument, not stdin")
+	}
+
 	var input []byte
 	var err error
-
-	switch len(args) {
-	case 0:
+	if len(rest) == 1 {
+		input, err = os.ReadFile(rest[0])
+	} else {
 		input, err = io.ReadAll(os.Stdin)
-	case 1:
-		input, err = os.ReadFile(args[0])
-	default:
-		return fmt.Errorf("usage: mdfmt [file]")
 	}
 	if err != nil {
 		return err
 	}
 
-	_, err = os.Stdout.WriteString(mdtable.Format(string(input)))
+	formatted := mdtable.Format(string(input))
+
+	if *write {
+		info, err := os.Stat(rest[0])
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(rest[0], []byte(formatted), info.Mode().Perm())
+	}
+
+	_, err = os.Stdout.WriteString(formatted)
 	return err
 }
