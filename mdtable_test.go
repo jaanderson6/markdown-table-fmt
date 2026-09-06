@@ -73,6 +73,19 @@ func TestFormat(t *testing.T) {
 				"| x    | ok   |\n",
 		},
 		{
+			name: "wide CJK runes are measured as two columns wide",
+			input: "| Word | Note |\n" +
+				"|---|---|\n" +
+				"| 日本語 | ok |\n" +
+				"| x | ok |\n",
+			// "日本語" is 3 runes but occupies 6 display columns, so the
+			// column needs to be as wide as "Note" plus two more spaces.
+			want: "| Word   | Note |\n" +
+				"| ------ | ---- |\n" +
+				"| 日本語 | ok   |\n" +
+				"| x      | ok   |\n",
+		},
+		{
 			name: "surrounding prose and blank lines are left alone",
 			input: "# Heading\n" +
 				"\n" +

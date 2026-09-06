@@ -10,7 +10,7 @@ package mdtable
 import (
 	"regexp"
 	"strings"
-	"unicode/utf8"
+	"unicode"
 )
 
 // Alignment is the column alignment declared by a table's separator row.
@@ -24,6 +24,45 @@ const (
 )
 
 var separatorCellRe = regexp.MustCompile(`^:?-+:?$`)
+
+// wideRanges covers the Unicode code points with an East Asian Width of
+// Wide or Fullwidth: CJK ideographs, hiragana/katakana, hangul, and their
+// fullwidth punctuation. The standard library has no East Asian Width
+// table, so this is a hand-rolled subset covering the common blocks.
+var wideRanges = &unicode.RangeTable{
+	R16: []unicode.Range16{
+		{Lo: 0x1100, Hi: 0x115F, Stride: 1}, // Hangul Jamo
+		{Lo: 0x2E80, Hi: 0x303E, Stride: 1}, // CJK radicals, symbols and punctuation
+		{Lo: 0x3041, Hi: 0x33FF, Stride: 1}, // Hiragana .. CJK compat
+		{Lo: 0x3400, Hi: 0x4DBF, Stride: 1}, // CJK extension A
+		{Lo: 0x4E00, Hi: 0x9FFF, Stride: 1}, // CJK unified ideographs
+		{Lo: 0xA000, Hi: 0xA4CF, Stride: 1}, // Yi
+		{Lo: 0xAC00, Hi: 0xD7A3, Stride: 1}, // Hangul syllables
+		{Lo: 0xF900, Hi: 0xFAFF, Stride: 1}, // CJK compatibility ideographs
+		{Lo: 0xFE30, Hi: 0xFE4F, Stride: 1}, // CJK compatibility forms
+		{Lo: 0xFF00, Hi: 0xFF60, Stride: 1}, // Fullwidth forms
+		{Lo: 0xFFE0, Hi: 0xFFE6, Stride: 1}, // Fullwidth signs
+	},
+	R32: []unicode.Range32{
+		{Lo: 0x20000, Hi: 0x2FFFD, Stride: 1}, // CJK extension B and beyond
+		{Lo: 0x30000, Hi: 0x3FFFD, Stride: 1}, // CJK extension G and beyond
+	},
+}
+
+// displayWidth returns the number of terminal columns s occupies, counting
+// wide (CJK) runes as two columns instead of one so alignment matches how
+// the table actually renders.
+func displayWidth(s string) int {
+	w := 0
+	for _, r := range s {
+		if unicode.Is(wideRanges, r) {
+			w += 2
+		} else {
+			w++
+		}
+	}
+	return w
+}
 
 // Format scans input for markdown table blocks and rewrites each one with
 // aligned columns and normalized spacing. Lines outside of a table block are
@@ -189,13 +228,13 @@ func formatTable(block []string) []string {
 		widths[i] = 3 // minimum so "---" and ":-:" separators always fit
 	}
 	for i, c := range header {
-		if w := utf8.RuneCountInString(c); w > widths[i] {
+		if w := displayWidth(c); w > widths[i] {
 			widths[i] = w
 		}
 	}
 	for _, row := range bodyRows {
 		for i, c := range row {
-			if w := utf8.RuneCountInString(c); w > widths[i] {
+			if w := displayWidth(c); w > widths[i] {
 				widths[i] = w
 			}
 		}
@@ -236,7 +275,7 @@ func renderSeparator(widths []int, aligns []Alignment) string {
 }
 
 func padCell(s string, width int, align Alignment) string {
-	diff := width - utf8.RuneCountInString(s)
+	diff := width - displayWidth(s)
 	if diff <= 0 {
 		return s
 	}
